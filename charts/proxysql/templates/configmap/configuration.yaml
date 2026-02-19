@@ -1,10 +1,11 @@
 {{- $replicas := .Values.replicaCount | int -}}
 {{- $fullname := include "proxysql.fullname" . -}}
+{{- $headlessName := include "proxysql.headlessServiceName" . -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "proxysql.fullname" . }}-config
-data: 
+  name: {{ include "proxysql.configMapName" . }}
+data:
   proxysql.cnf: |
     datadir="/var/lib/proxysql"
 
@@ -24,6 +25,10 @@ data:
       cluster_mysql_servers_diffs_before_sync=3
       cluster_mysql_users_diffs_before_sync=3
       cluster_proxysql_servers_diffs_before_sync=3
+      {{- if .Values.proxysql.admin.restapiEnabled }}
+      admin-restapi_enabled=true
+      admin-restapi_port={{ .Values.proxysql.admin.restapiPort | default 6070 }}
+      {{- end }}
     }
 
     mysql_variables=
@@ -56,42 +61,44 @@ data:
     # defines all the MySQL users
     mysql_users:
     (
-      {{ range $i, $e := .Values.proxysql.mysql.users -}}
-      { username = "{{ $e.username }}" , password = "{{ $e.password }}" , default_hostgroup = 0 , active = 1 },
-      {{- end}}
-
-      { username = "{{ $.Values.proxysql.mysql.monitoring.username }}" , password = "{{ $.Values.proxysql.mysql.monitoring.password }}" , default_hostgroup = 0 , active = 1 }
+    {{ range $i, $e := .Values.proxysql.mysql.users -}}
+    { username = "{{ $e.username }}" , password = "{{ $e.password }}" , default_hostgroup = 0 , active = 1 },
+    {{- end }}
+    { username = "{{ $.Values.proxysql.mysql.monitoring.username }}" , password = "{{ $.Values.proxysql.mysql.monitoring.password }}" , default_hostgroup = 0 , active = 1 }
     )
 
     proxysql_servers =
     (
-      {{ range $i, $e := until $replicas }}
-      {
-        hostname="{{ $fullname }}-{{ $e }}.{{ $fullname }}-headless"
-        port=6032
-        weight={{ $i }}
-        comment="{{ $fullname }}-{{ $e }}.{{ $fullname }}"
-      }{{ if lt $i (sub $replicas 1) }},{{ end }}
-      {{ end }}
+    {{ range $i, $e := until $replicas }}
+    {
+      hostname="{{ $fullname }}-{{ $e }}.{{ $headlessName }}"
+      port=6032
+      weight={{ $i }}
+      comment="{{ $fullname }}-{{ $e }}.{{ $fullname }}"
+    }{{ if lt $i (sub $replicas 1) }},{{ end }}
+    {{ end }}
     )
 
     {{ .Values.proxysql.customConfiguration | default "" | nindent 4 }}
 
+    {{- if not .Values.referenceStyle }}
     scheduler=
     (
-      {
-        id=1
-        active=1
-        interval_ms=5000
-        filename="/bin/bash"
-        arg1="/usr/local/sbin/config-watcher.sh"
-        arg2=""
-        arg3=""
-        arg4=""
-        arg5=""
-      }
+    {
+      id=1
+      active=1
+      interval_ms=5000
+      filename="/bin/bash"
+      arg1="/usr/local/sbin/config-watcher.sh"
+      arg2=""
+      arg3=""
+      arg4=""
+      arg5=""
+    }
     )
+    {{- end }}
 
+  {{- if not .Values.referenceStyle }}
   readiness.sh: |
     #!/bin/bash
     set -e
@@ -141,12 +148,12 @@ data:
 
     if [ ! -f /var/lib/proxysql/.running ]; then
       /usr/bin/mysql -uadmin -p{{ .Values.proxysql.admin.adminPassword }} -h127.0.0.1 -P6032 -e"
-        LOAD MYSQL QUERY RULES TO RUNTIME;
-        LOAD MYSQL SERVERS TO RUNTIME;
-        LOAD MYSQL USERS TO RUNTIME;
+      LOAD MYSQL QUERY RULES TO RUNTIME;
+      LOAD MYSQL SERVERS TO RUNTIME;
+      LOAD MYSQL USERS TO RUNTIME;
       "
       touch /var/lib/proxysql/.running
     fi
 
     exit 0
-
+  {{- end }}

@@ -3,13 +3,32 @@ kind: Service
 metadata:
   name: {{ include "proxysql.fullname" . }}
   labels:
-    {{- include "proxysql.labels" . | nindent 4 }}
+    app: {{ include "proxysql.name" . }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
+  {{- if .Values.referenceStyle }}
+  ports:
+    - name: proxysql-mysql
+      port: 6033
+      targetPort: 6033
+      protocol: TCP
+    - name: proxysql-admin
+      port: 6032
+      targetPort: 6032
+      protocol: TCP
+  {{- else }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: proxysql
       protocol: TCP
       name: proxysql
+  {{- end }}
   selector:
-    {{- include "proxysql.selectorLabels" . | nindent 4 }}
+    app: {{ include "proxysql.name" . }}
+    {{- if not .Values.referenceStyle }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- end }}

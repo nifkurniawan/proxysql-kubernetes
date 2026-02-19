@@ -35,7 +35,8 @@ Common labels
 */}}
 {{- define "proxysql.labels" -}}
 helm.sh/chart: {{ include "proxysql.chart" . }}
-{{ include "proxysql.selectorLabels" . }}
+app.kubernetes.io/name: {{ include "proxysql.name" . }}
+app: {{ include "proxysql.name" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -47,6 +48,7 @@ Selector labels
 */}}
 {{- define "proxysql.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "proxysql.name" . }}
+app: {{ include "proxysql.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
@@ -58,5 +60,37 @@ Create the name of the service account to use
 {{- default (include "proxysql.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Headless service name (reference style: proxysqlcluster)
+*/}}
+{{- define "proxysql.headlessServiceName" -}}
+{{- if .Values.headlessServiceName }}
+{{- .Values.headlessServiceName }}
+{{- else }}
+{{- include "proxysql.fullname" . }}-headless
+{{- end }}
+{{- end }}
+
+{{/*
+ConfigMap name (reference style: proxysql-configmap)
+*/}}
+{{- define "proxysql.configMapName" -}}
+{{- if .Values.configMapName }}
+{{- .Values.configMapName }}
+{{- else }}
+{{- include "proxysql.fullname" . }}-config
+{{- end }}
+{{- end }}
+
+{{/*
+Selector labels for reference style (app only) or full
+*/}}
+{{- define "proxysql.podSelectorLabels" -}}
+app: {{ include "proxysql.name" . }}
+{{- if not .Values.referenceStyle }}
+app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}

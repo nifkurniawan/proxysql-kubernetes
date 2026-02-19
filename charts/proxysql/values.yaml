@@ -6,7 +6,7 @@
 replicaCount: 3
 
 image:
-  repository: dustinrue/proxysql
+  repository: proxysql/proxysql
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -14,6 +14,13 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+# When true, output matches proxysql-staging-reference: simple TCP probes,
+# headless name proxysqlcluster, configmap proxysql-configmap, LoadBalancer + GKE internal, etc.
+referenceStyle: false
+# Used when referenceStyle or when set explicitly:
+headlessServiceName: ""   # e.g. "proxysqlcluster"
+configMapName: ""          # e.g. "proxysql-configmap"
 
 proxysql:
   # Admin variables. See https://proxysql.com/documentation/global-variables/admin-variables/
@@ -31,6 +38,8 @@ proxysql:
     # configuration from tenants.
     clusterAdminUser: "radmin"
     clusterAdminPassword: "radmin"
+    restapiEnabled: true
+    restapiPort: 6070
 
   # MySQL variables. See https://proxysql.com/documentation/global-variables/mysql-variables/
   # These variables affect settings for ProxySQL on port 6033.
@@ -62,6 +71,11 @@ proxysql:
   storage:
     persistent: false
     storageClass: ""
+    size: 500Mi
+    # VolumeClaimTemplate options (used when persistent or referenceStyle)
+    volumeClaimName: proxysql-data
+    accessModes:
+      - ReadWriteOnce
 
   # Define custom configuration values here. This configuration 
   # snippet will be appended to the proxy.cnf file.
@@ -103,6 +117,7 @@ serviceAccount:
   name: ""
 
 podAnnotations: {}
+podLabels: {}
 
 podSecurityContext: {}
   # fsGroup: 2000
@@ -120,6 +135,7 @@ securityContext:
 service:
   type: ClusterIP
   port: 6033
+  annotations: {}
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -152,3 +168,10 @@ affinity:
                 values:
                   - proxysql
           topologyKey: "kubernetes.io/hostname"
+
+terminationGracePeriod: 300
+
+# StatefulSet options (used when referenceStyle: true)
+statefulset:
+  podManagementPolicy: OrderedReady
+  revisionHistoryLimit: 10
